@@ -1,29 +1,70 @@
-name: Deploy to EC2
+name: CI/CD Pipeline — Nivara
 
 on:
   push:
     branches: [ master ]
 
 jobs:
-  deploy:
+  build-and-deploy:
+    name: Build & Deploy to EC2
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Latest Code
         uses: actions/checkout@v4
 
+      - name: Verify Project Structure
+        run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Triggered by: ${{ github.actor }}"
+          ls -la
+
+      - name: Validate Dockerfile
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "Dockerfile found"
+            cat Dockerfile
+          else
+            echo "Dockerfile missing"
+            exit 1
+          fi
+
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            echo "========================================"
+            echo "  NIVARA DEPLOYMENT STARTED"
+            echo "========================================"
+
+            echo "[1/5] Pulling latest code..."
             cd /home/ec2-user/app
             git fetch --all
             git reset --hard origin/master
+
+            echo "[2/5] Building Docker image..."
             docker build -t my-app .
+
+            echo "[3/5] Stopping old container..."
             docker stop my-container || true
             docker rm my-container || true
+
+            echo "[4/5] Starting new container..."
             docker run -d --name my-container -p 8080:3000 my-app
+
+            echo "[5/5] Cleaning up old images..."
             docker image prune -f
+
+            echo "========================================"
+            echo "  DEPLOYMENT SUCCESSFUL"
+            echo "========================================"
+
+      - name: Confirm Deployment
+        run: |
+          echo "Deployment complete"
+          echo "Live at: http://${{ secrets.EC2_HOST }}:8080"
