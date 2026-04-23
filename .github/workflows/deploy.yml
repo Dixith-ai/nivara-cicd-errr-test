@@ -20,8 +20,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ec2-user/app
-            git pull origin master
-            docker build --no-cache -t my-app .
+            git fetch --all
+            git reset --hard origin/master
+            docker build -t my-app .
             docker stop my-container || true
             docker rm my-container || true
             docker run -d --name my-container -p 8080:3000 my-app
